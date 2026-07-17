@@ -1,0 +1,2208 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>日語文獻 OCR 校讀</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- 字体非阻塞加载：首屏先用本地宋体渲染，Noto 到了再无缝升级，避免每次刷新等 googleapis -->
+<link rel="stylesheet" media="print" onload="this.media='all'"
+      href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Serif+JP:wght@400;600&display=swap">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Serif+JP:wght@400;600&display=swap"></noscript>
+<!-- defer：脚本并行下载、解析完页面再执行，不阻塞首屏 -->
+<script defer src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<style>
+:root {
+  --bg:        #f0e9d8;
+  --surface:   #fdfaf2;
+  --border:    #c4a87a;
+  --border-lt: #ddd0b0;
+  --accent:    #8c1515;
+  --accent2:   #5a3e1b;
+  --gold:      #b8952a;
+  --text:      #1c1208;
+  --muted:     #7a6248;
+  --font-zh:   'Noto Serif SC', 'SimSun', 'STSong', serif;
+  --font-jp:   'Noto Serif JP', 'Yu Mincho', 'MS Mincho', serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-zh);
+  font-size: 15px;
+  line-height: 1.9;
+  min-height: 100vh;
+}
+
+/* ── 页头 ──────────────────────────────────────────────── */
+.site-header {
+  text-align: center;
+  padding: 32px 20px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.site-header .crown {
+  display: flex; align-items: center; justify-content: center;
+  gap: 16px; color: var(--gold); font-size: 11px; letter-spacing: .4em;
+  margin-bottom: 10px;
+}
+.site-header .crown::before,
+.site-header .crown::after {
+  content: ''; flex: 1; max-width: 80px;
+  height: 1px; background: var(--gold);
+}
+.site-header h1 {
+  font-size: 1.6rem; font-weight: 700; letter-spacing: .15em;
+  color: var(--accent2);
+}
+.site-header .subtitle {
+  font-size: .82rem; color: var(--muted); letter-spacing: .1em; margin-top: 4px;
+}
+
+/* ── 主容器 ────────────────────────────────────────────── */
+.wrap { max-width: 1400px; margin: 0 auto; padding: 24px 20px 60px; }
+
+/* ── 卡片基础 ──────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  margin-bottom: 16px;
+}
+.card-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-lt);
+  font-size: .82rem; font-weight: 600; color: var(--accent2);
+  letter-spacing: .08em; cursor: pointer; user-select: none;
+}
+.card-head:hover { background: #f5efe0; }
+.card-body { padding: 16px; }
+
+/* ── 设置面板 ──────────────────────────────────────────── */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px 20px;
+}
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: .78rem; color: var(--muted); letter-spacing: .06em; }
+.field input,
+.field select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 1px;
+  background: var(--bg);
+  font-family: var(--font-zh);
+  font-size: .85rem;
+  color: var(--text);
+  outline: none;
+  transition: border-color .15s;
+}
+.field input:focus, .field select:focus { border-color: var(--accent); }
+.field .pw-wrap { position: relative; }
+.field .pw-wrap input { padding-right: 34px; width: 100%; }
+.field .pw-toggle {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer; color: var(--muted);
+  padding: 0; line-height: 1;
+}
+.field .hint { font-size: .73rem; color: var(--muted); }
+.field .hint a { color: var(--accent); }
+
+.section-divider {
+  grid-column: 1/-1;
+  font-size: .7rem; font-weight: 700; color: var(--muted);
+  letter-spacing: .15em; text-transform: uppercase;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-lt);
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 18px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--accent2);
+  font-family: var(--font-zh);
+  font-size: .82rem; font-weight: 600;
+  letter-spacing: .06em;
+  cursor: pointer; border-radius: 1px;
+  transition: background .15s, border-color .15s;
+}
+.btn:hover { background: #e8dcc8; border-color: var(--gold); }
+.btn-primary {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.btn-primary:hover { background: #6e1010; border-color: #6e1010; }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.save-tip { font-size: .78rem; color: #2e7d32; }
+
+/* ── 上传区 ────────────────────────────────────────────── */
+.drop-zone {
+  border: 1.5px dashed var(--border);
+  padding: 28px;
+  text-align: center;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: border-color .2s, background .2s;
+}
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: var(--accent);
+  background: #f5ebe0;
+}
+.drop-zone.has-file { border-color: #2e7d32; background: #f0f7f0; }
+.dz-icon { font-size: 2rem; color: var(--border); margin-bottom: 6px; }
+.dz-label { font-size: .9rem; color: var(--muted); letter-spacing: .06em; }
+.dz-sub { font-size: .78rem; color: var(--border); margin-top: 4px; }
+.file-info { display: flex; align-items: center; gap: 10px; justify-content: center; }
+.file-icon { font-size: 1.6rem; }
+.file-name { font-weight: 600; color: var(--accent2); }
+.file-size { font-size: .8rem; color: var(--muted); }
+
+.action-bar {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 12px;
+}
+
+/* ── 日志 ──────────────────────────────────────────────── */
+.log-area {
+  background: #1a1208;
+  color: #e0d5c0;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  height: 180px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border-radius: 1px;
+}
+.log-area::-webkit-scrollbar { width: 5px; }
+.log-area::-webkit-scrollbar-thumb { background: #4a3828; border-radius: 3px; }
+.log-t { color: #5a4a38; margin-right: 8px; }
+.log-prog { color: #a8d5a2; }
+.log-err  { color: #f28b82; }
+.status-dot {
+  display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; background: #a8d5a2;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid #c4a87a; border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 三栏结果 ──────────────────────────────────────────── */
+.result-toolbar {
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+  /* 冻结窗格：滚动时吸顶常驻，保存/下载随时可点 */
+  position: sticky; top: 0; z-index: 50;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.12);
+}
+.result-toolbar h2 {
+  font-size: .9rem; font-weight: 700; color: var(--accent2);
+  letter-spacing: .1em; margin-right: auto;
+}
+
+.page-section {
+  margin-bottom: 40px;
+  /* 屏幕外的页跳过布局/绘制，缩放与翻页不再触发全文重排 */
+  content-visibility: auto;
+  contain-intrinsic-size: 0 600px;
+}
+
+.page-rule {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 0;
+}
+.page-rule .page-label {
+  font-size: .78rem; font-weight: 700; color: var(--accent);
+  letter-spacing: .25em; white-space: nowrap;
+  padding: 2px 10px;
+  border: 1px solid var(--accent);
+}
+.page-rule .rule-line {
+  flex: 1; height: 1px; background: var(--border-lt);
+}
+
+.three-cols {
+  display: grid;
+  grid-template-columns: 28% 1fr 1fr;
+  border: 1px solid var(--border);
+  background: var(--border);
+  gap: 1px;
+  margin-top: 8px;
+}
+.two-cols {
+  display: grid;
+  grid-template-columns: 32% 1fr;
+  border: 1px solid var(--border);
+  background: var(--border);
+  gap: 1px;
+  margin-top: 8px;
+}
+.col {
+  background: var(--surface);
+  display: flex; flex-direction: column;
+  min-height: 200px;
+}
+.col-head {
+  padding: 6px 14px;
+  background: #f0e6d0;
+  border-bottom: 1px solid var(--border-lt);
+  font-size: .72rem; font-weight: 700; letter-spacing: .2em;
+  color: var(--accent2); text-align: center;
+}
+.col-body {
+  padding: 14px 16px;
+  flex: 1;
+  font-size: .88rem;
+  overflow-wrap: break-word;
+}
+.col-body.jp { font-family: var(--font-jp); font-size: .86rem; line-height: 2; }
+.col-body.zh { font-family: var(--font-zh); line-height: 1.95; }
+
+/* markdown within columns */
+.col-body h1,.col-body h2,.col-body h3 {
+  font-weight: 700; margin: 1em 0 .4em; color: var(--accent2);
+}
+.col-body h2 { font-size: 1.05em; }
+.col-body h3 { font-size: .95em; }
+.col-body p { margin: .5em 0; }
+.col-body blockquote {
+  border-left: 2px solid var(--border);
+  padding: .2em .8em; color: var(--muted); font-style: italic;
+  background: #f7f2e8; margin: .5em 0;
+}
+.col-body table { border-collapse: collapse; font-size: .82em; width: 100%; margin: .8em 0; }
+.col-body th,.col-body td { border: 1px solid var(--border-lt); padding: .3em .6em; }
+.col-body th { background: #f0e6d0; }
+.col-body hr { border: none; border-top: 1px solid var(--border-lt); margin: .8em 0; }
+.col-body code { background: #ede8dc; padding: .1em .3em; font-size: .85em; border-radius: 2px; }
+
+/* PDF canvas column */
+.col-image { background: #e8e0d0; position: relative; }
+.col-image .col-body {
+  padding: 8px;
+  overflow: auto;          /* 放大后可滚动 */
+  position: relative;
+  user-select: none;       /* 拖动平移时不误选文字 */
+  overscroll-behavior: contain;  /* 平移到边缘时不连带滚动整页 */
+}
+.col-image canvas,
+.col-image img.shadow-img {
+  width: 100%; height: auto;
+  display: block;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  cursor: zoom-in;
+  /* 不加 width 过渡：缩放需与“光标锚点”滚动校正同帧瞬时生效，否则会抖动 */
+}
+/* 缩放提示角标 */
+.zoom-badge {
+  position: absolute; bottom: 8px; right: 10px;
+  font-size: .65rem; color: var(--muted); background: rgba(240,233,216,.85);
+  padding: 1px 6px; border-radius: 2px; border: 1px solid var(--border-lt);
+  pointer-events: none; opacity: 0; transition: opacity .25s;
+  font-family: monospace;
+}
+.col-image:hover .zoom-badge { opacity: 1; }
+.pdf-loading { color: var(--muted); font-size: .8rem; text-align: center; padding: 20px 0; }
+
+/* ── OCR 单栏（仅 OCR 模式下备用） ── */
+.ocr-single { padding: 20px; }
+
+/* ── 下载按钮 ──────────────────────────────────────────── */
+.dl-link {
+  font-size: .78rem; color: var(--accent);
+  background: none; border: none; border-bottom: 1px solid var(--accent);
+  padding: 0 0 1px; cursor: pointer; font-family: var(--font-zh);
+}
+.dl-link:hover { color: var(--accent2); border-color: var(--accent2); }
+
+/* ── 灯箱 ─────────────────────────────────────────────── */
+#lightbox {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.88); z-index: 9999;
+  align-items: center; justify-content: center;
+  cursor: zoom-out; overflow: auto;
+}
+#lightbox.open { display: flex; }
+#lightbox img {
+  max-width: 92vw; max-height: 92vh;
+  display: block; box-shadow: 0 4px 40px rgba(0,0,0,.6);
+  border: 1px solid #444;
+}
+#lightbox .lb-close {
+  position: fixed; top: 18px; right: 24px;
+  color: #ccc; font-size: 2rem; line-height: 1;
+  cursor: pointer; user-select: none;
+}
+#lightbox .lb-close:hover { color: #fff; }
+
+/* 书影 canvas 可点击 */
+.col-image canvas { cursor: zoom-in; }
+
+/* 使用图片模式 */
+.use-img-badge {
+  display:none; font-size:.7rem; color: var(--accent);
+  border:1px solid var(--accent); padding:1px 6px; border-radius:1px;
+}
+.page-section[data-use-image="1"] .use-img-badge { display:inline; }
+.page-section[data-use-image="1"] .col-image { background:#e0d8c8; }
+.page-section[data-use-image="1"] .col-image::after {
+  content:'📷 導出時使用此圖';
+  display:block; text-align:center; font-size:.75rem;
+  color:var(--accent); padding:6px; font-family:var(--font-zh);
+}
+
+/* 导出按钮 */
+.btn-export {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:10px 32px; font-size:.95rem; font-family:var(--font-zh);
+  letter-spacing:.1em; font-weight:600;
+  border:1.5px solid var(--accent2); color:var(--accent2);
+  background:var(--surface); cursor:pointer; border-radius:1px;
+  transition:background .15s, color .15s, border-color .15s;
+}
+.btn-export:hover { background:var(--accent2); color:#fff; }
+.btn-export:disabled { opacity:.5; cursor:not-allowed; }
+
+/* OCR 编辑模式 */
+.col-head-bar { display:flex; align-items:center; gap:8px; }
+.col-head-bar .col-head { flex:1; }
+
+/* ✎ 編輯 —— 默认常显，保持淡色；悬停/编辑中变色 */
+.ocr-edit-btn {
+  background: none; border: none; padding: 0;
+  font-size: .78rem; font-family: var(--font-zh);
+  color: var(--muted);
+  cursor: pointer; letter-spacing: .04em;
+  transition: color .18s;
+  opacity: 1;
+}
+.ocr-edit-btn:hover  { color: var(--accent2) !important; }
+.ocr-edit-btn.active { color: var(--accent); }
+
+/* ↻ 重譯此頁 —— 编辑中才显示，朱砂底线样式 */
+.ocr-retrans-btn {
+  background: none; border: none; border-bottom: 1px solid var(--accent);
+  padding: 0 1px 1px; font-size: .75rem; font-family: var(--font-zh);
+  color: var(--accent); cursor: pointer; letter-spacing: .05em;
+  transition: opacity .15s;
+}
+.ocr-retrans-btn:hover   { opacity: .75; }
+.ocr-retrans-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* 📷 圖片模式 —— 页码行里的开关，不抢眼 */
+.img-mode-btn {
+  background: none; border: none; padding: 0 3px;
+  font-size: .7rem; font-family: var(--font-zh);
+  color: var(--border); cursor: pointer; letter-spacing: .04em;
+  transition: color .15s;
+}
+.img-mode-btn:hover  { color: var(--muted); }
+.img-mode-btn.active { color: var(--accent); font-weight: 600; }
+
+/* 📝 譯文筆記 —— 默认常显，保持淡色；悬停/有内容时变色 */
+.note-btn {
+  background: none; border: none; padding: 0;
+  font-size: .78rem; font-family: var(--font-zh);
+  color: var(--muted); cursor: pointer; letter-spacing: .04em;
+  transition: color .18s; opacity: 1;
+}
+.note-btn:hover  { color: var(--accent2) !important; }
+.note-btn.active { color: var(--accent); }
+.note-wrap { display: none; margin-top: 8px; }
+.note-wrap.open { display: block; }
+.note-ta {
+  width: 100%; box-sizing: border-box; min-height: 56px; resize: vertical;
+  border: 1px dashed var(--border); border-radius: 1px;
+  background: #fffdf6; color: var(--text);
+  font-family: var(--font-zh); font-size: .85rem; line-height: 1.6;
+  padding: 8px 10px;
+}
+.note-ta:focus { outline: none; border-color: var(--accent); border-style: solid; }
+.note-ta::placeholder { color: var(--border-lt); }
+
+/* 續校跳轉到斷點時的高亮一閃 */
+.page-section.cursor-flash { animation: cursorFlash 1.8s ease-out; }
+@keyframes cursorFlash {
+  0%   { background: #fff3cd; }
+  100% { background: transparent; }
+}
+
+/* btn-mini 保留给导出等其他用途 */
+.btn-mini {
+  padding: 2px 10px; font-size: .72rem; font-family: var(--font-zh);
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--accent2); cursor: pointer; border-radius: 1px;
+  white-space: nowrap; transition: background .12s;
+}
+.btn-mini:hover { background: #e8dcc8; }
+
+.ocr-textarea {
+  width:100%; height:100%; min-height:200px;
+  padding:10px; font-family:var(--font-jp); font-size:.84rem; line-height:2;
+  border:1px dashed var(--accent); background:#fffdf5;
+  resize:vertical; outline:none; color:var(--text);
+}
+.trans-loading { color:var(--muted); font-size:.82rem; padding:10px 0; font-style:italic; }
+
+/* chevron */
+.chev { transition: transform .2s; display: inline-block; font-size: .7rem; }
+.chev.open { transform: rotate(180deg); }
+
+/* responsive */
+@media (max-width: 900px) {
+  .three-cols { grid-template-columns: 1fr; }
+  .two-cols   { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── 頂部導航（獨立版） ────────────────────────────────── -->
+<div style="background:#3d3b33;color:white;padding:10px 20px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 5px rgba(0,0,0,.15);font-family:'Noto Serif TC',serif;font-size:13px;">
+  <div style="font-size:17px;font-weight:bold;letter-spacing:.05em;">日語文獻 OCR 校讀工具</div>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <a href="#" id="lang-toggle" onclick="toggleLang();return false;" title="簡體 / 繁體切換" style="color:#bbb;text-decoration:none;font-size:12px;">简体</a>
+    <a href="#" onclick="showAbout();return false;" style="color:#bbb;text-decoration:none;font-size:12px;">關於本工具</a>
+  </div>
+</div>
+
+<!-- ── 页头 ──────────────────────────────────────────────── -->
+<header class="site-header">
+  <div class="crown">◈ 文獻校讀 ◈</div>
+  <h1>日語文獻 OCR 校讀</h1>
+  <p class="subtitle">PaddleOCR 識別　·　多模型翻譯　·　書影 / 原文 / 譯文 三欄對照</p>
+</header>
+
+<div class="wrap">
+
+<!-- ── 恢復上次校讀提示條 ───────────────────────────────── -->
+<div id="resume-bar" style="display:none; margin-bottom:16px; padding:12px 16px;
+     background:#fff8e6; border:1px solid var(--gold); border-radius:2px;
+     align-items:center; gap:14px; font-size:.85rem; color:var(--accent2);">
+  <span id="resume-text" style="flex:1;">檢測到上次未完成的校讀。</span>
+  <button class="btn btn-primary" onclick="restoreAutosave()">恢復上次校讀</button>
+  <button class="btn" onclick="dismissAutosave()">忽略</button>
+</div>
+
+<!-- ── 刷新後重連後台任務提示條 ─────────────────────────── -->
+<div id="reconnect-bar" style="display:none; margin-bottom:16px; padding:12px 16px;
+     background:#eef6ff; border:1px solid #4a90d9; border-radius:2px;
+     align-items:center; gap:14px; font-size:.85rem; color:var(--accent2);">
+  <span style="font-size:1.1rem;">🔄</span>
+  <span id="reconnect-text" style="flex:1;"></span>
+  <button class="btn btn-primary" onclick="doReconnect()">恢復查看</button>
+  <button class="btn" onclick="dismissReconnect()">忽略</button>
+</div>
+
+<!-- ── 设置卡片 ─────────────────────────────────────────── -->
+<div class="card" id="settings-card">
+  <div class="card-head" onclick="toggleSettings()">
+    <span>⚙</span>
+    <span style="flex:1">API 設定</span>
+    <span class="chev" id="settings-chev">▼</span>
+  </div>
+  <div class="card-body" id="settings-body" style="display:none">
+    <div class="settings-grid">
+
+      <div class="section-divider">OCR 設定（PaddleOCR）</div>
+
+      <div class="field" style="grid-column:1/-1">
+        <label>PaddleOCR Token
+          <a class="hint" href="https://aistudio.baidu.com/paddleocr/task" target="_blank">
+            （在 aistudio → PaddleOCR → API 裏複製 TOKEN 值）</a>
+        </label>
+        <div class="pw-wrap">
+          <input id="paddle-token" type="password" placeholder="貼入 Token…">
+          <button class="pw-toggle" onclick="togglePass('paddle-token')">👁</button>
+        </div>
+        <span class="hint">API 地址已固定，無需填寫。</span>
+      </div>
+
+      <div class="section-divider">翻譯設定</div>
+
+      <div class="field">
+        <label>翻譯服務商</label>
+        <select id="provider" onchange="onProviderChange()"></select>
+      </div>
+
+      <div class="field">
+        <label>模型</label>
+        <select id="model"></select>
+        <input id="model-custom" type="text" placeholder="輸入模型名稱" style="display:none">
+      </div>
+
+      <div class="field" style="grid-column:1/-1">
+        <label>
+          <span id="key-label-text">翻譯 API Key</span>
+          <a id="key-help-link" href="#" target="_blank" style="display:none;margin-left:6px;font-size:.75rem;color:var(--accent);font-weight:400;"></a>
+        </label>
+        <div class="pw-wrap">
+          <input id="translate-key" type="password" placeholder="">
+          <button class="pw-toggle" onclick="togglePass('translate-key')">👁</button>
+        </div>
+      </div>
+
+      <div class="field" id="custom-url-row" style="display:none; grid-column:1/-1">
+        <label>自定義 Base URL</label>
+        <input id="custom-base-url" type="text" placeholder="http://localhost:11434">
+      </div>
+
+      <div class="field">
+        <label>源語言（原文）</label>
+        <select id="source">
+          <option value="日语">日語</option>
+          <option value="英语">英語</option>
+          <option value="韩语">韓語</option>
+          <option value="中文">中文（简体）</option>
+          <option value="繁体中文">中文（繁體）</option>
+          <option value="法语">法語</option>
+          <option value="德语">德語</option>
+          <option value="拉丁语">拉丁語</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>目標語言（譯文）</label>
+        <select id="target">
+          <option value="中文">中文</option>
+          <option value="英文">英文</option>
+          <option value="日文">日文</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>單頁最大 tokens</label>
+        <input id="max-tokens" type="number" value="8192" min="1024" max="65536" step="1024">
+      </div>
+
+      <div class="field" style="grid-column:1/-1; flex-direction:row; align-items:center; gap:8px">
+        <input type="checkbox" id="ocr-only" style="width:auto">
+        <label for="ocr-only" style="cursor:pointer; color:var(--text)">僅 OCR，不翻譯</label>
+      </div>
+
+      <div class="field" style="grid-column:1/-1; flex-direction:row; align-items:center; gap:8px; flex-wrap:wrap">
+        <input type="checkbox" id="remember-keys" style="width:auto">
+        <label for="remember-keys" style="cursor:pointer; color:var(--text)">在這台電腦的瀏覽器中記住 API Key</label>
+        <button type="button" class="btn" onclick="clearSavedKeys()" style="margin-left:auto;padding:3px 10px;font-size:.72rem;">清除已保存密鑰</button>
+        <span class="hint" style="width:100%;">不勾選時，密鑰只保留到本頁關閉；本地後端不會把密鑰寫入磁碟。</span>
+      </div>
+
+    </div>
+    <div style="margin-top:14px; display:flex; align-items:center; gap:12px">
+      <button class="btn" onclick="saveSettings()">保存設定</button>
+      <span class="save-tip" id="save-tip" style="display:none">已保存</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── 上传卡片 ─────────────────────────────────────────── -->
+<div class="card">
+  <div class="card-body">
+    <div class="drop-zone" id="drop-zone"
+      onclick="document.getElementById('file-input').click()"
+      ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+      <div id="dz-default">
+        <div class="dz-icon">⊕</div>
+        <div class="dz-label">拖拽 PDF 、圖片、OCR結果、或校讀存檔，也可點擊選取</div>
+        <div class="dz-sub">支持 .pdf · .jpg · .png · .webp · .bmp ； .md · .txt ； .json（校讀存檔，導入即續校）</div>
+      </div>
+      <div id="dz-file" style="display:none">
+        <div class="file-info">
+          <span class="file-icon">📄</span>
+          <div>
+            <div class="file-name" id="file-name"></div>
+            <div class="file-size" id="file-size"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <input id="file-input" type="file" style="display:none"
+      accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.md,.txt,.json"
+      onchange="onFileSelected(this.files[0])">
+
+    <!-- 书影 PDF（仅 OCR 导入模式时显示，不上传服务器） -->
+    <div id="shadow-zone" style="display:none; margin-top:10px">
+      <div id="shadow-drop"
+        style="border:1px dashed var(--border-lt); padding:10px 16px; border-radius:2px;
+               cursor:pointer; display:flex; align-items:center; gap:10px;
+               font-size:.82rem; color:var(--muted); transition:border-color .15s;"
+        onclick="document.getElementById('shadow-input').click()"
+        ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+        ondragleave="this.style.borderColor=''"
+        ondrop="event.preventDefault();this.style.borderColor='';onShadowDrop(event)">
+        <span style="font-size:1.1rem; color:var(--border)">⊕</span>
+        <span id="shadow-label">拖入原書 PDF 以顯示書影（選填，<b>不上傳</b>至伺服器）</span>
+      </div>
+      <input id="shadow-input" type="file" accept=".pdf" style="display:none"
+        onchange="onShadowSelected(this.files[0])">
+    </div>
+
+    <div class="action-bar" id="action-bar" style="display:none">
+      <button class="btn btn-primary" id="start-btn" onclick="startProcess()">▶ 開始處理</button>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:.78rem;color:var(--muted);white-space:nowrap;">頁碼範圍</label>
+        <input id="page-range" type="text" placeholder="如 1-5, 8（留空 = 全書）"
+          style="padding:5px 8px;font-size:.8rem;border:1px solid var(--border);border-radius:1px;
+                 background:var(--bg);font-family:var(--font-zh);width:180px;outline:none;">
+      </div>
+      <button class="btn" onclick="clearFile()">清除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 进度卡片 ─────────────────────────────────────────── -->
+<div class="card" id="progress-card" style="display:none">
+  <div class="card-head" style="cursor:default">
+    <span class="status-dot" id="prog-dot"></span>
+    <span id="prog-title" style="flex:1">處理中…</span>
+    <span class="spinner" id="prog-spinner"></span>
+  </div>
+  <div id="upload-prog" style="display:none; padding:10px 14px; border-bottom:1px solid var(--border-lt);">
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:5px;">
+      上傳中 <b id="upload-pct">0%</b> <span id="upload-detail"></span>　·　大文件上傳較慢，<b style="color:var(--accent)">請勿刷新</b>
+    </div>
+    <div style="height:7px;background:var(--bg);border:1px solid var(--border-lt);border-radius:4px;overflow:hidden;">
+      <div id="upload-bar" style="height:100%;width:0%;background:var(--accent);transition:width .2s;"></div>
+    </div>
+  </div>
+  <div class="card-body" style="padding:0">
+    <div class="log-area" id="log-area"></div>
+  </div>
+</div>
+
+<!-- ── 结果区域 ─────────────────────────────────────────── -->
+<div id="result-area" style="display:none">
+  <div class="result-toolbar">
+    <h2 id="result-title">校讀結果</h2>
+    <button class="btn" id="save-review-btn" onclick="downloadReviewJson()" title="保存當前校讀進度（含人工校改與重譯），可隨時導入續校，不耗 token"> 保存進度</button>
+    <button class="dl-link" id="dl-ocr" onclick="download('ocr')"> 下載 OCR.md</button>
+    <button class="dl-link" id="dl-bi"  onclick="download('bi')" style="display:none"> 下載 雙語.md</button>
+  </div>
+
+  <!-- 導入半截存檔後，提示繼續翻譯未完成的頁 -->
+  <div id="continue-bar" style="display:none; margin-bottom:16px; padding:12px 16px;
+       background:#eef6ff; border:1px solid #4a90d9; border-radius:2px;
+       align-items:center; gap:14px; font-size:.85rem; color:var(--accent2);">
+    <span id="continue-text" style="flex:1;"></span>
+    <button class="btn btn-primary" onclick="continueTranslation()">繼續翻譯</button>
+    <button class="btn" onclick="dismissContinue()">忽略</button>
+  </div>
+
+  <div id="page-list"></div>
+
+  <!-- 校读完毕导出区 -->
+  <div id="export-footer" style="display:none; margin-top:40px; text-align:center; padding:32px 0 48px; border-top:1px solid var(--border-lt);">
+    <div style="font-size:.8rem; color:var(--muted); letter-spacing:.12em; margin-bottom:18px;">◈ 校讀完畢 ◈</div>
+    <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;">
+      <button class="btn-export" id="export-btn" onclick="exportWord()"> 匯出 Word 雙語對照</button>
+      <button class="btn-export" onclick="downloadReviewJson()"
+        style="border-color:var(--accent2);"> 保存校讀進度（.json）</button>
+    </div>
+    <div style="font-size:.74rem; color:var(--muted); margin-top:12px; letter-spacing:.04em;">
+      Word：文字頁灰底原文 + 宋體譯文，圖片頁書影嵌入<br>
+      存檔：可隨時拖回本工具繼續校讀，不需重跑 OCR / 翻譯
+    </div>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+
+<!-- 獨立版：已移除「上傳至文獻庫」功能 -->
+
+<!-- ── 關於本工具模態框 ────────────────────────────────────────── -->
+<div id="about-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:8888;align-items:center;justify-content:center;" onclick="if(event.target===this)closeAbout()">
+  <div style="background:var(--surface);border:1px solid var(--border);max-width:600px;width:92%;padding:30px 30px 24px;border-radius:2px;font-family:var(--font-zh);max-height:88vh;overflow-y:auto;position:relative;">
+    <button onclick="closeAbout()" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:1.2rem;color:var(--muted);cursor:pointer;">✕</button>
+    <div style="font-size:1.05rem;font-weight:700;color:var(--accent2);letter-spacing:.1em;margin-bottom:16px;">關於本工具</div>
+    <div style="font-size:.86rem;line-height:2;color:var(--text);">
+
+      <p style="margin-bottom:14px;">本工具集成了 OCR 文字識別與大語言模型翻譯，為學術文獻（首要面向日語，同時支持英、韓、中、法、德、拉丁等多語）提供快速的識別、翻譯與三欄對照校讀功能，是《新撰字鏡》數字人文工作平台的子系統。</p>
+
+      <div style="font-weight:700;color:var(--accent2);margin-bottom:6px;font-size:.88rem;letter-spacing:.08em;">工作流程</div>
+      <ol style="padding-left:1.4em;margin-bottom:16px;font-size:.84rem;line-height:2;">
+        <li>上傳 PDF 或掃描圖片（或直接導入已有 OCR 文本），並選擇源語言／目標語言</li>
+        <li>PaddleOCR 進行版面分析與 OCR 識別（支持竪排、表格、多欄版式）</li>
+        <li>大語言模型（Claude / DeepSeek / Gemini / OpenAI）進行學術翻譯</li>
+        <li>三欄對照顯示（書影 / 原文 / 譯文），支持人工逐頁校改與重譯</li>
+        <li>導出 Word 對照文件，或保存 .json 校讀存檔以便隨時續校</li>
+      </ol>
+
+      <div style="font-weight:700;color:var(--accent2);margin-bottom:6px;font-size:.88rem;letter-spacing:.08em;">鳴謝</div>
+      <div style="background:#f7f2e8;border-left:3px solid var(--border);padding:10px 14px;border-radius:0 4px 4px 0;font-size:.83rem;line-height:1.9;margin-bottom:16px;">
+        本工具的 OCR 功能由 <strong>百度 PaddleOCR-VL 模型</strong>提供，通過 AI Studio 平台的公開 API 調用。感謝百度 AI 提供的高質量版面解析能力，使得複雜版式的古典文獻識別成為可能。<br>
+        PaddleOCR 開源項目：<a href="https://github.com/PaddlePaddle/PaddleOCR" target="_blank" style="color:var(--accent);">github.com/PaddlePaddle/PaddleOCR</a><br>
+        AI Studio API 申請：<a href="https://aistudio.baidu.com/paddleocr/task" target="_blank" style="color:var(--accent);">aistudio.baidu.com/paddleocr/task</a>
+      </div>
+
+      <div style="font-weight:700;color:var(--accent2);margin-bottom:6px;font-size:.88rem;letter-spacing:.08em;">聯係方式</div>
+      <div style="font-size:.83rem;color:var(--text);line-height:1.9;margin-bottom:16px;">
+        如有問題、建議或合作意向，歡迎聯係小紅書 <strong>@麥麥</strong>（小紅書號：583859854）。
+      </div>
+
+      <div style="font-weight:700;color:var(--accent2);margin-bottom:6px;font-size:.88rem;letter-spacing:.08em;">版權說明</div>
+      <div style="font-size:.82rem;color:var(--muted);line-height:1.9;">
+        本工具不存儲任何原始 PDF 文件。用戶使用本工具時，請自行遵守相關著作權法規，確保對文獻的使用符合合理使用或已獲授權。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 灯箱 ──────────────────────────────────────────────── -->
+<div id="lightbox" onclick="closeLightbox()">
+  <span class="lb-close" onclick="closeLightbox()">✕</span>
+  <img id="lightbox-img" alt="書影放大" onclick="event.stopPropagation()">
+</div>
+
+<script>
+// ── PDF.js setup ────────────────────────────────────────────
+// workerSrc 延後到首次用到 PDF 時再設（腳本已改 defer，解析期間 pdfjsLib 尚未就緒）
+let pdfDoc = null;
+
+function _ensurePdfWorker() {
+  if (window.pdfjsLib && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+  }
+}
+
+async function loadPdf(file) {
+  _ensurePdfWorker();
+  const ab = await file.arrayBuffer();
+  pdfDoc = await pdfjsLib.getDocument({ data: ab }).promise;
+}
+
+async function renderPdfPage(pageNum, container) {
+  if (!pdfDoc) return;
+  if (container.dataset.rendering === '1' || container.dataset.rendered === '1') return;
+  container.dataset.rendering = '1';
+  container.innerHTML = '<div class="pdf-loading">載入中…</div>';
+  try {
+    const page = await pdfDoc.getPage(pageNum);
+    const vp = page.getViewport({ scale: 1.8 });
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width; canvas.height = vp.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+    canvas.title = '滾輪縮放　·　放大後按住拖動查看各處　·　點擊全屏';
+    canvas.onclick = () => openLightbox(canvas.toDataURL('image/png'));
+    container.innerHTML = '';
+    // 继承当前缩放比例
+    const existingZoom = parseFloat(container.dataset.zoom || '1');
+    canvas.style.width  = (existingZoom * 100).toFixed(0) + '%';
+    canvas.style.height = 'auto';
+    canvas.style.cursor = existingZoom > 1 ? 'grab' : 'zoom-in';
+    container.appendChild(canvas);
+    container.dataset.rendered = '1';
+  } catch { container.innerHTML = '<div class="pdf-loading">無法渲染</div>'; }
+  finally { container.dataset.rendering = '0'; }
+}
+
+// 页面滚出视口时销毁 canvas，释放内存（滚回来再重渲染）
+function unloadPdfPage(container) {
+  if (container.dataset.rendered !== '1') return;
+  const canvas = container.querySelector('canvas');
+  if (canvas) { canvas.width = 0; canvas.height = 0; }  // 立即释放显存/内存
+  container.innerHTML = '<div class="pdf-loading">捲動至此自動載入</div>';
+  container.dataset.rendered = '0';
+}
+
+// ── 灯箱 ─────────────────────────────────────────────────────
+function openLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// Lazy-load pages with IntersectionObserver
+const pageObserver = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      renderPdfPage(parseInt(e.target.dataset.pdfPage), e.target);
+    } else {
+      unloadPdfPage(e.target);   // 滚出视口即回收，内存只占可见的几页
+    }
+  });
+}, { rootMargin: '300px' });
+
+// ── Provider config ─────────────────────────────────────────
+const PROVIDERS = {
+  deepseek: { label:'DeepSeek API Key', ph:'sk-...',
+    keyUrl:'https://platform.deepseek.com/api_keys',
+    keyHint:'在 DeepSeek 平台免費申請，充值後按量計費', models:[
+    { v:'deepseek-chat',     l:'deepseek-chat / V3（推薦，極便宜）' },
+    { v:'deepseek-reasoner', l:'deepseek-reasoner / R1' },
+  ]},
+  claude: { label:'Anthropic API Key', ph:'sk-ant-...',
+    keyUrl:'https://console.anthropic.com/settings/keys',
+    keyHint:'在 Anthropic Console 申請，需綁定信用卡', models:[
+    { v:'claude-sonnet-4-6',         l:'claude-sonnet-4-6（推薦）' },
+    { v:'claude-opus-4-8',           l:'claude-opus-4-8（最強）' },
+    { v:'claude-haiku-4-5-20251001', l:'claude-haiku-4-5（最快）' },
+  ]},
+  openai: { label:'OpenAI API Key', ph:'sk-...',
+    keyUrl:'https://platform.openai.com/api-keys',
+    keyHint:'在 OpenAI Platform 申請，需綁定信用卡', models:[
+    { v:'gpt-4o',      l:'gpt-4o' },
+    { v:'gpt-4o-mini', l:'gpt-4o-mini（便宜）' },
+  ]},
+  gemini: { label:'Google AI Studio API Key', ph:'AIza...',
+    keyUrl:'https://aistudio.google.com/app/apikey',
+    keyHint:'在 Google AI Studio 免費申請，有免費額度（需代理）', models:[
+    { v:'gemini-2.5-flash-preview-05-20', l:'Gemini 2.5 Flash' },
+    { v:'gemini-2.5-pro-preview-06-05',   l:'Gemini 2.5 Pro' },
+  ]},
+  custom: { label:'自定義 API Key', ph:'...', keyUrl:'', keyHint:'', models:[] },
+};
+
+// ── State ───────────────────────────────────────────────────
+let selectedFile = null;
+let resultData   = {};
+// 結果頁 i（0-indexed）→ 原始 PDF 真實頁碼（1-indexed）的映射，
+// 用頁碼範圍篩選時，書影需渲染原始頁而非裁切後的順序頁
+let pageMap = null;
+
+// 增量翻譯狀態
+let _expectTrans = false;
+let _renderedOcr = false;
+let _ocrFetched  = false;
+let _filledTrans = new Set();
+let _translating = false;   // 是否正在主動翻譯（控制空譯文欄顯示"翻譯中…"還是"尚未翻譯"）
+
+// 解析 "1-5, 8, 10-15" → 排序的 1-indexed 頁碼列表（與後端 _parse_page_range 一致）
+function parsePageRange(str, total) {
+  const out = new Set();
+  for (let part of String(str).split(',')) {
+    part = part.trim();
+    if (!part) continue;
+    if (part.includes('-')) {
+      const [s, e] = part.split('-');
+      const a = parseInt(s), b = parseInt(e);
+      if (!isNaN(a) && !isNaN(b))
+        for (let n = Math.max(1, a); n <= Math.min(total, b); n++) out.add(n);
+    } else {
+      const n = parseInt(part);
+      if (!isNaN(n) && n >= 1 && n <= total) out.add(n);
+    }
+  }
+  return [...out].sort((x, y) => x - y);
+}
+
+// ── Settings ────────────────────────────────────────────────
+function onProviderChange() {
+  const p    = document.getElementById('provider').value;
+  const info = PROVIDERS[p] || PROVIDERS.custom;
+  document.getElementById('key-label-text').textContent    = info.label;
+  document.getElementById('translate-key').placeholder = info.ph;
+  const lnk = document.getElementById('key-help-link');
+  if (info.keyUrl) {
+    lnk.href        = info.keyUrl;
+    lnk.title       = info.keyHint;
+    lnk.textContent = '（如何獲取？）';
+    lnk.style.display = '';
+  } else {
+    lnk.style.display = 'none';
+  }
+
+  const sel = document.getElementById('model');
+  const cus = document.getElementById('model-custom');
+  if (p === 'custom') {
+    sel.style.display = 'none'; cus.style.display = '';
+  } else {
+    sel.style.display = ''; cus.style.display = 'none';
+    sel.innerHTML = info.models.map(m => `<option value="${m.v}">${m.l}</option>`).join('');
+  }
+  document.getElementById('custom-url-row').style.display = p === 'custom' ? '' : 'none';
+}
+
+function buildProviderSelect() {
+  const labels = { deepseek:'DeepSeek（推薦·便宜）', claude:'Claude（Anthropic）',
+                   openai:'OpenAI', gemini:'Gemini（Google）', custom:'自定義（OpenAI 相容）' };
+  document.getElementById('provider').innerHTML =
+    Object.entries(labels).map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+}
+
+function loadSettings() {
+  const s = JSON.parse(localStorage.getItem('jatrans_cfg3') || '{}');
+  // 兼容旧设置：旧版本没有 remember_keys 字段，但已保存过密钥时视为用户希望保留。
+  const rememberKeys = s.remember_keys === true ||
+    (s.remember_keys === undefined && !!(s.paddle_token || s.translate_key));
+  document.getElementById('remember-keys').checked = rememberKeys;
+  if (rememberKeys && s.paddle_token) document.getElementById('paddle-token').value = s.paddle_token;
+  if (s.provider)        document.getElementById('provider').value        = s.provider;
+  onProviderChange();
+  if (s.model) {
+    const sel = document.getElementById('model');
+    const opt = [...sel.options].find(o => o.value === s.model);
+    if (opt) sel.value = s.model;
+    else     document.getElementById('model-custom').value = s.model;
+  }
+  if (rememberKeys && s.translate_key) document.getElementById('translate-key').value = s.translate_key;
+  if (s.custom_base_url) document.getElementById('custom-base-url').value = s.custom_base_url;
+  if (s.source)          document.getElementById('source').value          = s.source;
+  if (s.target)          document.getElementById('target').value          = s.target;
+  if (s.max_tokens)      document.getElementById('max-tokens').value      = s.max_tokens;
+  if (s.ocr_only)        document.getElementById('ocr-only').checked      = s.ocr_only;
+}
+
+function saveSettings() {
+  const cfg = getConfig();
+  cfg.remember_keys = document.getElementById('remember-keys').checked;
+  if (!cfg.remember_keys) {
+    delete cfg.paddle_token;
+    delete cfg.translate_key;
+  }
+  localStorage.setItem('jatrans_cfg3', JSON.stringify(cfg));
+  const tip = document.getElementById('save-tip');
+  tip.style.display = ''; setTimeout(() => tip.style.display = 'none', 2000);
+}
+
+function clearSavedKeys() {
+  document.getElementById('paddle-token').value = '';
+  document.getElementById('translate-key').value = '';
+  document.getElementById('remember-keys').checked = false;
+  const s = JSON.parse(localStorage.getItem('jatrans_cfg3') || '{}');
+  delete s.paddle_token;
+  delete s.translate_key;
+  s.remember_keys = false;
+  localStorage.setItem('jatrans_cfg3', JSON.stringify(s));
+  alert('已清除這台電腦瀏覽器中保存的 API Key。');
+}
+
+function getConfig() {
+  const p = document.getElementById('provider').value;
+  const model = p === 'custom'
+    ? document.getElementById('model-custom').value.trim()
+    : document.getElementById('model').value;
+  return {
+    paddle_token:    document.getElementById('paddle-token').value.trim(),
+    provider:        p, model,
+    translate_key:   document.getElementById('translate-key').value.trim(),
+    custom_base_url: document.getElementById('custom-base-url').value.trim(),
+    source:          document.getElementById('source').value,
+    target:          document.getElementById('target').value,
+    max_tokens:      parseInt(document.getElementById('max-tokens').value) || 8192,
+    ocr_only:        document.getElementById('ocr-only').checked,
+    page_range:      (document.getElementById('page-range')?.value || '').trim(),
+  };
+}
+
+function toggleSettings() {
+  const body = document.getElementById('settings-body');
+  const chev = document.getElementById('settings-chev');
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  chev.classList.toggle('open', open);
+}
+function openSettings() {
+  document.getElementById('settings-body').style.display = '';
+  document.getElementById('settings-chev').classList.add('open');
+}
+
+// ── File handling ────────────────────────────────────────────
+function onDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
+function onDragLeave()  { document.getElementById('drop-zone').classList.remove('drag-over'); }
+function onDrop(e) { e.preventDefault(); onDragLeave(); onFileSelected(e.dataTransfer.files[0]); }
+
+async function onFileSelected(f) {
+  if (!f) return;
+
+  // 校讀存檔（.json）：直接還原視圖，不跑 OCR / 翻譯
+  if (/\.json$/i.test(f.name)) {
+    let obj;
+    try { obj = JSON.parse(await f.text()); }
+    catch { alert('JSON 解析失敗，文件可能損壞'); return; }
+    if (!obj || obj._type !== 'lit_review_session') {
+      alert('這不是校讀存檔（.review.json）'); return;
+    }
+    selectedFile = f;
+    document.getElementById('dz-default').style.display = 'none';
+    document.getElementById('dz-file').style.display    = '';
+    document.getElementById('drop-zone').classList.add('has-file');
+    document.getElementById('file-name').textContent = f.name;
+    document.getElementById('file-size').textContent =
+      `校讀存檔 · 共 ${(obj.ocr_pages || []).length} 頁`;
+    document.getElementById('action-bar').style.display  = 'none';   // 無需「開始處理」
+    document.getElementById('progress-card').style.display = 'none';
+    document.getElementById('shadow-zone').style.display  = '';      // 可補書影 PDF
+    document.getElementById('shadow-label').textContent =
+      '拖入原書 PDF 以顯示書影（選填，不上傳；存檔不含書影圖）';
+    loadReviewSession(obj);
+    return;
+  }
+
+  selectedFile = f;
+  pdfDoc = null;
+
+  const isOcrImport = /\.(md|txt)$/i.test(f.name);
+  if (isOcrImport) {
+    previewOcrFile(f);
+    document.getElementById('shadow-zone').style.display = '';
+  } else {
+    document.getElementById('shadow-zone').style.display = 'none';
+    if (f.name.toLowerCase().endsWith('.pdf')) loadPdf(f);
+  }
+
+  document.getElementById('dz-default').style.display = 'none';
+  document.getElementById('dz-file').style.display    = '';
+  document.getElementById('drop-zone').classList.add('has-file');
+  document.getElementById('file-name').textContent = f.name;
+  document.getElementById('file-size').textContent = isOcrImport ? '解析中…' : fmtSize(f.size);
+  document.getElementById('action-bar').style.display = '';
+  document.getElementById('result-area').style.display = 'none';
+  document.getElementById('progress-card').style.display = 'none';
+}
+
+function clearFile() {
+  selectedFile = null; pdfDoc = null;
+  document.getElementById('file-input').value   = '';
+  document.getElementById('shadow-input').value = '';
+  document.getElementById('dz-default').style.display = '';
+  document.getElementById('dz-file').style.display    = 'none';
+  document.getElementById('drop-zone').classList.remove('has-file');
+  document.getElementById('action-bar').style.display = 'none';
+  document.getElementById('shadow-zone').style.display = 'none';
+  document.getElementById('shadow-label').textContent =
+    '拖入原書 PDF 以顯示書影（選填，不上傳至伺服器）';
+}
+
+// 预览导入的 OCR 文件，统计页数
+let _ocrImportPages = 0;
+async function previewOcrFile(f) {
+  const text  = await f.text();
+  const pages = text.split(/\n\s*[-*]{3,}\s*\n/).filter(p => p.trim());
+  const count = Math.max(pages.length, 1);
+  _ocrImportPages = count;
+  document.getElementById('file-size').textContent = `OCR 導入 · 共 ${count} 頁`;
+}
+
+// 书影 PDF 选取（仅客户端，不上传）
+async function onShadowSelected(f) {
+  if (!f) return;
+  await loadPdf(f);
+  document.getElementById('shadow-label').textContent = `書影：${f.name}　✓`;
+  document.getElementById('shadow-drop').style.borderColor = 'var(--accent2)';
+  attachShadowsToExistingPages();   // 若已導入存檔，補上書影列
+  maybeWarnPageMismatch();          // OCR 導入 + 書影頁數不一致時溫和提示
+}
+
+// OCR 文本頁數與書影 PDF 頁數不一致時，在書影標籤後追加溫和提示（不阻斷流程）
+function maybeWarnPageMismatch() {
+  if (!pdfDoc) return;
+  const isOcrImport = /\.(md|txt)$/i.test(selectedFile?.name || '');
+  if (!isOcrImport || !_ocrImportPages) return;
+  if ((document.getElementById('page-range')?.value || '').trim()) return;  // 用了頁碼範圍，差異屬預期
+  if (_ocrImportPages === pdfDoc.numPages) return;
+  const lbl = document.getElementById('shadow-label');
+  if (lbl) lbl.innerHTML =
+    `書影：${esc(selectedFile.name)}　✓　` +
+    `<span style="color:var(--accent)">⚠️ 書影 ${pdfDoc.numPages} 頁 ≠ OCR 文本 ${_ocrImportPages} 頁，書影可能錯位；` +
+    `若 PDF 為整本而 OCR 只截取了部分，請在上方「頁碼範圍」填寫對應範圍。</span>`;
+}
+
+// 結果已在頁面上、之後才掛上原書 PDF 時，為每頁補書影渲染
+function attachShadowsToExistingPages() {
+  if (!pdfDoc) return;
+  const bodies = document.querySelectorAll('.col-image .col-body');
+  bodies.forEach((body, i) => {
+    if (body.dataset.pdfPage) return;          // 已有書影列，跳過
+    const realPage = (pageMap && pageMap[i]) ? pageMap[i] : (i + 1);
+    body.dataset.pdfPage = realPage;
+    body.dataset.rendered = '0';
+    body.innerHTML = '<div class="pdf-loading">捲動至此自動載入</div>';
+    pageObserver.observe(body);
+  });
+}
+function onShadowDrop(e) {
+  const f = e.dataTransfer.files[0];
+  if (f?.name.toLowerCase().endsWith('.pdf')) onShadowSelected(f);
+}
+
+function fmtSize(b) {
+  if (b < 1048576) return (b/1024).toFixed(1)+' KB';
+  return (b/1048576).toFixed(1)+' MB';
+}
+
+// ── Processing ───────────────────────────────────────────────
+async function startProcess() {
+  const cfg = getConfig();
+  const isOcrImport = /\.(md|txt)$/i.test(selectedFile?.name || '');
+  if (!isOcrImport && !cfg.paddle_token) { alert('請填寫 PaddleOCR Token'); openSettings(); return; }
+  if (!cfg.ocr_only && !cfg.translate_key) { alert('請填寫翻譯 API Key'); openSettings(); return; }
+  if (!cfg.ocr_only && cfg.provider === 'custom' && !cfg.custom_base_url)
+    { alert('請填寫自定義 Base URL'); openSettings(); return; }
+  if (!selectedFile) return;
+
+  const btn = document.getElementById('start-btn');
+  btn.disabled = true;
+
+  document.getElementById('progress-card').style.display = '';
+  document.getElementById('result-area').style.display   = 'none';
+  document.getElementById('log-area').innerHTML = '';
+  document.getElementById('prog-title').textContent = selectedFile.name;
+  document.getElementById('prog-dot').style.background = '#a8d5a2';
+  document.getElementById('prog-dot').style.animation  = 'pulse 1.5s ease-in-out infinite';
+  document.getElementById('prog-spinner').style.display = '';
+
+  // 快照頁碼映射：篩選時記錄結果頁→原始頁碼，供書影正確渲染
+  const rngStr = cfg.page_range || '';
+  if (rngStr && pdfDoc) {
+    const sel = parsePageRange(rngStr, pdfDoc.numPages);
+    pageMap = sel.length ? sel : null;
+  } else {
+    pageMap = null;
+  }
+
+  // 增量渲染狀態復位
+  _expectTrans = !cfg.ocr_only;
+  _renderedOcr = false;
+  _ocrFetched  = false;
+  _filledTrans = new Set();
+  _translating = !cfg.ocr_only;
+
+  // 客戶端裁頁：PDF + 指定頁碼範圍時，只上傳那幾頁（連跨境上傳也一起縮小）
+  let uploadFile = selectedFile;
+  let cfgToSend  = cfg;
+  const _rng = (cfg.page_range || '').trim();
+  if (_rng && pdfDoc && /\.pdf$/i.test(selectedFile.name) && window.PDFLib) {
+    try {
+      const sel0 = parsePageRange(_rng, pdfDoc.numPages).map(n => n - 1);
+      if (sel0.length) {
+        appendLog(`正在本地裁出所選 ${sel0.length} 頁…`, 'prog');
+        uploadFile = await cropPdfClient(selectedFile, sel0);
+        cfgToSend  = { ...cfg, page_range: '' };   // 已在本地裁好，服務端不再重複裁
+        appendLog(`已裁出 ${sel0.length} 頁，僅上傳這些頁（${fmtSize(uploadFile.size)}）`, 'prog');
+      }
+    } catch (e) {
+      appendLog('本地裁頁失敗，改為上傳整本由服務端裁：' + e.message, 'prog');
+      uploadFile = selectedFile; cfgToSend = cfg;
+    }
+  }
+
+  const form = new FormData();
+  form.append('file', uploadFile);
+  form.append('config', JSON.stringify(cfgToSend));
+
+  // XHR 上傳：顯示上傳進度；返回 task_id 後輪詢，並存檔以便刷新後重連
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/process');
+  xhr.upload.onprogress = (e) => { if (e.lengthComputable) showUploadProgress(e.loaded, e.total); };
+  xhr.upload.onload = () => { hideUploadProgress(); appendLog('上傳完成，伺服器處理中…', 'prog'); };
+  xhr.onload = () => {
+    if (xhr.status < 200 || xhr.status >= 300) { appendLog('上傳失敗：HTTP ' + xhr.status, 'err'); setDone(false); return; }
+    let data; try { data = JSON.parse(xhr.responseText); } catch { appendLog('返回解析失敗', 'err'); setDone(false); return; }
+    if (data.error)    { appendLog('錯誤：' + data.error, 'err'); setDone(false); return; }
+    if (!data.task_id) { appendLog('未取得任務 ID', 'err'); setDone(false); return; }
+    saveActiveTask(data.task_id);      // 存檔：刷新後可重連
+    pollStatus(data.task_id);
+  };
+  xhr.onerror = () => { hideUploadProgress(); appendLog('網絡錯誤：上傳或連接中斷', 'err'); setDone(false); };
+  showUploadProgress(0, uploadFile.size || 1);   // 立即顯示進度條，不等首個 progress 事件
+  xhr.send(form);
+}
+
+// 用 pdf-lib 在瀏覽器端裁出指定頁（0-indexed），返回小 PDF File
+async function cropPdfClient(file, zeroIdx) {
+  const { PDFDocument } = window.PDFLib;
+  const src = await PDFDocument.load(await file.arrayBuffer());
+  const out = await PDFDocument.create();
+  const pages = await out.copyPages(src, zeroIdx);
+  pages.forEach(p => out.addPage(p));
+  const bytes = await out.save();
+  return new File([bytes], file.name, { type: 'application/pdf' });
+}
+
+// ── 上傳進度條 ───────────────────────────────────────────────
+function showUploadProgress(loaded, total) {
+  const box = document.getElementById('upload-prog');
+  if (box) box.style.display = '';
+  const pct = total ? Math.round(loaded / total * 100) : 0;
+  const p = document.getElementById('upload-pct');    if (p) p.textContent = pct + '%';
+  const b = document.getElementById('upload-bar');    if (b) b.style.width = pct + '%';
+  const d = document.getElementById('upload-detail'); if (d) d.textContent = `（${fmtSize(loaded)} / ${fmtSize(total)}）`;
+}
+function hideUploadProgress() {
+  const box = document.getElementById('upload-prog');
+  if (box) box.style.display = 'none';
+}
+
+// ── 刷新可重連：把正在跑的後台任務記在 localStorage ──────────────
+const ACTIVE_TASK_KEY = 'jatrans_active_task';
+let _pendingReconnect = null;
+
+function saveActiveTask(taskId) {
+  try {
+    localStorage.setItem(ACTIVE_TASK_KEY, JSON.stringify({
+      task_id: taskId,
+      stem: (selectedFile ? selectedFile.name.replace(/\.[^.]+$/, '') : 'output'),
+      expectTrans: _expectTrans,
+      t: Date.now(),
+    }));
+  } catch {}
+}
+function clearActiveTask() {
+  try { localStorage.removeItem(ACTIVE_TASK_KEY); } catch {}
+}
+
+// 頁面載入時探測：若上次提交的任務仍在後台運行/已完成，提示恢復
+async function checkActiveTask() {
+  let raw; try { raw = localStorage.getItem(ACTIVE_TASK_KEY); } catch { return; }
+  if (!raw) return;
+  let info; try { info = JSON.parse(raw); } catch { clearActiveTask(); return; }
+  if (!info || !info.task_id) { clearActiveTask(); return; }
+  let d;
+  try {
+    const r = await fetch(`/api/task_status?task_id=${encodeURIComponent(info.task_id)}`);
+    if (r.status === 404) { clearActiveTask(); return; }   // 服務器已重啟/任務過期
+    d = await r.json();
+  } catch { return; }   // 網絡波動，保留記錄下次再探
+  if (!d || d.state === 'error') { clearActiveTask(); return; }
+  _pendingReconnect = info;
+  const stateLabel = d.state === 'done' ? '已完成' : `處理中（${esc(d.msg || '')}）`;
+  document.getElementById('reconnect-text').innerHTML =
+    `偵測到上次提交的任務「<b>${esc(info.stem || '文獻')}</b>」${stateLabel}，可直接恢復，無需重新上傳。`;
+  document.getElementById('reconnect-bar').style.display = 'flex';
+}
+
+function doReconnect() {
+  const info = _pendingReconnect;
+  if (!info) return;
+  document.getElementById('reconnect-bar').style.display = 'none';
+  // 恢復處理 UI
+  document.getElementById('progress-card').style.display = '';
+  document.getElementById('result-area').style.display   = 'none';
+  document.getElementById('log-area').innerHTML = '';
+  document.getElementById('prog-title').textContent = (info.stem || '文獻') + '（恢復中…）';
+  document.getElementById('prog-spinner').style.display = '';
+  document.getElementById('prog-dot').style.background = '#a8d5a2';
+  document.getElementById('prog-dot').style.animation  = 'pulse 1.5s ease-in-out infinite';
+  // 復位增量狀態（書影 PDF 刷新後已丟失，需重新拖入）
+  _expectTrans = !!info.expectTrans;
+  _renderedOcr = false; _ocrFetched = false; _filledTrans = new Set();
+  pageMap = null; selectedFile = null;
+  appendLog('已重新連接到後台任務，繼續獲取進度…', 'prog');
+  document.getElementById('shadow-zone').style.display = '';
+  document.getElementById('shadow-label').textContent =
+    '如需書影對照，請重新拖入原書 PDF（刷新後不保留）';
+  pollStatus(info.task_id);
+}
+
+function dismissReconnect() {
+  clearActiveTask();
+  _pendingReconnect = null;
+  document.getElementById('reconnect-bar').style.display = 'none';
+}
+
+// 輪詢後台任務：OCR 一就緒先渲染原文+書影，譯文按頁增量拉取
+let _pollTimer   = null;
+let _lastPollMsg = '';
+function pollStatus(taskId) {
+  clearInterval(_pollTimer);
+  _lastPollMsg = '';
+  _pollTimer = setInterval(() => pollTick(taskId), 3000);
+  pollTick(taskId);   // 立即先跑一次
+}
+
+async function pollTick(taskId) {
+  let d;
+  try {
+    const r = await fetch(`/api/task_status?task_id=${encodeURIComponent(taskId)}`);
+    if (!r.ok) return;                 // 偶發網絡波動，等下一輪
+    d = await r.json();
+  } catch { return; }
+
+  if (d.msg && d.msg !== _lastPollMsg) {
+    appendLog(d.msg, d.state === 'error' ? 'err' : 'prog');
+    _lastPollMsg = d.msg;
+  }
+
+  // OCR 就緒：拉一次全文，立即渲染原文 + 書影
+  if (d.ocr_ready && !_ocrFetched) {
+    _ocrFetched = true;
+    try {
+      const r = await fetch(`/api/task_pages?task_id=${encodeURIComponent(taskId)}&kind=ocr`);
+      const j = await r.json();
+      beginIncrementalRender(j.ocr_pages || []);
+    } catch { _ocrFetched = false; }
+  }
+
+  // 增量翻譯：取尚未填入的已完成頁（每輪最多 40 頁，避免單次過大）
+  if (_renderedOcr && Array.isArray(d.trans_done) && d.trans_done.length) {
+    const need = d.trans_done.filter(i => !_filledTrans.has(i)).slice(0, 40);
+    if (need.length) {
+      try {
+        const r = await fetch(`/api/task_pages?task_id=${encodeURIComponent(taskId)}&kind=trans&ids=${need.join(',')}`);
+        const j = await r.json();
+        for (const k in (j.trans || {})) fillTranslation(parseInt(k), j.trans[k]);
+      } catch {}
+    }
+  }
+
+  if (d.state === 'done') {
+    clearInterval(_pollTimer);
+    clearActiveTask();
+    await finalizeStreaming(taskId);
+  } else if (d.state === 'error') {
+    clearInterval(_pollTimer);
+    clearActiveTask();
+    setDone(false);
+  }
+}
+
+// OCR 一就緒就渲染原文 + 書影，譯文欄先佔位「翻譯中…」
+function beginIncrementalRender(ocrPages) {
+  if (_renderedOcr) return;
+  resultData = {
+    stem: (selectedFile ? selectedFile.name.replace(/\.[^.]+$/, '') : 'output'),
+    ocr_pages: ocrPages,
+    trans_pages: new Array(ocrPages.length).fill(''),
+    ocr_md: null, bilingual_md: null,
+  };
+  showResult();
+  _renderedOcr = true;
+  appendLog('原文已就緒，可先校讀前面的頁面；譯文將逐頁補入…', 'prog');
+}
+
+// 某頁譯文到達：就地填入該頁譯文欄
+function fillTranslation(i, md) {
+  if (_filledTrans.has(i)) return;
+  const el = document.getElementById('trans-body-' + i);
+  if (el) {
+    const clean = String(md).split('\n').filter(l => !l.startsWith('> ') && l !== '>').join('\n');
+    el.innerHTML = marked.parse(clean);
+  }
+  if (!resultData.trans_pages) resultData.trans_pages = [];
+  resultData.trans_pages[i] = md;
+  _filledTrans.add(i);
+}
+
+// 收尾：拉最終結果，補齊未填頁與 ocr_md/bilingual_md（保留用戶已編輯/已填的）
+async function finalizeStreaming(taskId) {
+  try {
+    const r = await fetch(`/api/task_pages?task_id=${encodeURIComponent(taskId)}&kind=result`);
+    const res = await r.json();
+    if (res && res.ocr_pages) {
+      if (!_renderedOcr) {
+        resultData = {
+          stem: res.stem || 'output',
+          ocr_pages: res.ocr_pages,
+          trans_pages: res.trans_pages || [],
+          ocr_md: res.ocr_md, bilingual_md: res.bilingual_md,
+        };
+        _expectTrans = (res.trans_pages || []).length > 0;
+        showResult();
+        _renderedOcr = true;
+        (res.trans_pages || []).forEach((t, i) => _filledTrans.add(i));
+      } else {
+        resultData.stem         = res.stem || resultData.stem;
+        resultData.ocr_md       = res.ocr_md;
+        resultData.bilingual_md = res.bilingual_md;
+        (res.trans_pages || []).forEach((t, i) => { if (!_filledTrans.has(i)) fillTranslation(i, t); });
+      }
+    }
+  } catch {}
+  appendLog('全部完成！', 'prog');
+  setDone(true);
+  autosaveSession();
+}
+
+function appendLog(msg, kind) {
+  const area = document.getElementById('log-area');
+  const now  = new Date().toLocaleTimeString('zh-CN', { hour12:false });
+  const d = document.createElement('div');
+  d.className = kind === 'prog' ? 'log-prog' : kind === 'err' ? 'log-err' : '';
+  d.innerHTML = `<span class="log-t">${now}</span>${esc(msg)}`;
+  area.appendChild(d);
+  area.scrollTop = area.scrollHeight;
+}
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function setDone(ok) {
+  _translating = false;
+  document.getElementById('start-btn').disabled = false;
+  document.getElementById('prog-spinner').style.display = 'none';
+  const dot = document.getElementById('prog-dot');
+  dot.style.background = ok ? '#a8d5a2' : '#f28b82';
+  dot.style.animation  = 'none';
+  document.getElementById('prog-title').textContent =
+    (ok ? '完成：' : '失敗：') + (selectedFile?.name || '');
+}
+
+// ── Parse result data ────────────────────────────────────────
+// 服务端直接返回 ocr_pages / trans_pages 列表，无需客户端解析
+// 以下函数仅作兼容保留，showResult 优先用列表
+function parseOcrPages(md) {
+  if (!md) return [];
+  return md.split(/\n\n---\n\n/)
+    .map(p => p.replace(/<!--[^>]*-->/g, '').trim())
+    .filter(Boolean);
+}
+function parseTransPages(md) { return []; }   // 不再使用
+
+// ── Build result view ────────────────────────────────────────
+function showResult() {
+  const ocrPages   = resultData.ocr_pages   || parseOcrPages(resultData.ocr_md);
+  const transPages = resultData.trans_pages || [];
+  const hasTrans   = _expectTrans || transPages.some(t => t && String(t).trim());
+  // pdfDoc 已加载即可渲染书影（含 shadow PDF 模式）
+  const isPdf      = !!pdfDoc;
+  const total      = Math.max(ocrPages.length, transPages.length);
+
+  document.getElementById('result-title').textContent =
+    `校讀結果　共 ${total} 頁`;
+  document.getElementById('dl-ocr').style.display = '';
+  document.getElementById('dl-bi').style.display  = hasTrans ? '' : 'none';
+
+  const list = document.getElementById('page-list');
+  list.innerHTML = '';
+
+  document.getElementById('export-footer').style.display = '';
+
+  for (let i = 0; i < total; i++) {
+    const sec = document.createElement('div');
+    sec.className = 'page-section';
+    sec.id = `page-section-${i}`;
+    sec.dataset.useImage = '0';
+
+    // Page header
+    const rule = document.createElement('div');
+    rule.className = 'page-rule';
+    rule.innerHTML = `<span class="rule-line"></span>
+      <span class="page-label">第 ${i+1} 頁</span>
+      <span class="use-img-badge">📷</span>
+      <button class="img-mode-btn" id="img-btn-${i}" onclick="toggleImageMode(${i})" title="導出 Word 時用書影圖片替代 OCR 文字">▣ 圖片</button>
+      <span class="rule-line"></span>`;
+    sec.appendChild(rule);
+
+    // Columns
+    const cols = document.createElement('div');
+    cols.className = hasTrans ? 'three-cols' : 'two-cols';
+
+    // Col 1: 書影
+    const c1 = document.createElement('div');
+    c1.className = 'col col-image';
+    c1.innerHTML = '<div class="col-head">書 影</div>';
+    const c1body = document.createElement('div');
+    c1body.className = 'col-body';
+    // 缩放角标
+    const badge = document.createElement('div');
+    badge.className = 'zoom-badge';
+    badge.textContent = '100%';
+    c1.appendChild(badge);
+
+    if (isPdf) {
+      // 篩選頁碼時，書影渲染原始 PDF 的真實頁；否則按結果順序
+      const realPage = (pageMap && pageMap[i]) ? pageMap[i] : (i + 1);
+      c1body.dataset.pdfPage = realPage;
+      c1body.innerHTML = '<div class="pdf-loading">捲動至此自動載入</div>';
+      pageObserver.observe(c1body);
+    } else if (selectedFile && /\.(jpe?g|png|webp|bmp)$/i.test(selectedFile.name)) {
+      const img = document.createElement('img');
+      img.className = 'shadow-img';
+      img.src = URL.createObjectURL(selectedFile);
+      img.title = '滾輪縮放　·　放大後按住拖動查看各處　·　點擊全屏';
+      img.onclick = () => openLightbox(img.src);
+      c1body.appendChild(img);
+    } else {
+      c1body.innerHTML = '<div class="pdf-loading">無書影</div>';
+    }
+
+    // 把当前 zoom 同步到画面：缩放图片，并在放大时把書影列锁成固定视窗（可拖动平移）
+    const applyZoomUI = (zoom) => {
+      const el = c1body.querySelector('canvas, img');
+      if (el) {
+        el.style.width  = (zoom * 100).toFixed(0) + '%';
+        el.style.height = 'auto';
+        el.style.cursor = zoom > 1 ? 'grab' : 'zoom-in';
+      }
+      badge.textContent = (zoom * 100).toFixed(0) + '%';
+      if (zoom > 1) {
+        if (c1body.dataset.baseH) c1body.style.height = c1body.dataset.baseH + 'px';
+        c1body.style.maxHeight   = '80vh';
+        c1body.style.touchAction = 'none';   // 触屏上拖动用于平移，不滚动整页
+      } else {
+        c1body.style.height = '';
+        c1body.style.maxHeight = '';
+        c1body.style.touchAction = '';
+        c1body.scrollLeft = c1body.scrollTop = 0;
+        delete c1body.dataset.baseH;
+      }
+    };
+
+    // 滚轮缩放（以光标为锚点，缩放后光标所指的细节保持不动）
+    c1body.addEventListener('wheel', (e) => {
+      const el = c1body.querySelector('canvas, img');
+      if (!el) return;
+      e.preventDefault();
+      const oldZoom = parseFloat(c1body.dataset.zoom || '1');
+      let zoom = Math.max(0.25, Math.min(5, oldZoom + (e.deltaY < 0 ? 0.15 : -0.15)));
+      zoom = Math.round(zoom * 100) / 100;
+      if (zoom === oldZoom) return;
+      // 第一次放大前，先记下 100% 时的视窗高度，作为之后的固定平移窗口
+      if (zoom > 1 && oldZoom <= 1 && !c1body.dataset.baseH) {
+        c1body.dataset.baseH = c1body.clientHeight;
+      }
+      const rect = c1body.getBoundingClientRect();
+      const cx = e.clientX - rect.left, cy = e.clientY - rect.top;        // 光标在视窗内的位置
+      const px = c1body.scrollLeft + cx, py = c1body.scrollTop + cy;      // 光标对应的内容坐标
+      c1body.dataset.zoom = zoom;
+      applyZoomUI(zoom);
+      const ratio = zoom / oldZoom;
+      c1body.scrollLeft = px * ratio - cx;
+      c1body.scrollTop  = py * ratio - cy;
+    }, { passive: false });
+
+    // 放大后按住拖动平移，查看图片各个角落
+    let panning = false, moved = false, sx = 0, sy = 0, sl = 0, st = 0;
+    c1body.addEventListener('pointerdown', (e) => {
+      moved = false;
+      if (e.button !== 0) return;
+      if (parseFloat(c1body.dataset.zoom || '1') <= 1) return;   // 未放大时不拦截（仍可点击放大灯箱）
+      if (!c1body.querySelector('canvas, img')) return;
+      panning = true;
+      sx = e.clientX; sy = e.clientY;
+      sl = c1body.scrollLeft; st = c1body.scrollTop;
+      try { c1body.setPointerCapture(e.pointerId); } catch (_) {}
+      c1body.style.cursor = 'grabbing';
+      e.preventDefault();
+    });
+    c1body.addEventListener('pointermove', (e) => {
+      if (!panning) return;
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+      c1body.scrollLeft = sl - dx;
+      c1body.scrollTop  = st - dy;
+    });
+    const endPan = (e) => {
+      if (!panning) return;
+      panning = false;
+      c1body.style.cursor = 'grab';
+      try { c1body.releasePointerCapture(e.pointerId); } catch (_) {}
+    };
+    c1body.addEventListener('pointerup', endPan);
+    c1body.addEventListener('pointercancel', endPan);
+    // 拖动后那次 click 不应弹出灯箱（捕获阶段拦截，避免触发 canvas/img 的 onclick）
+    c1body.addEventListener('click', (e) => {
+      if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; }
+    }, true);
+
+    c1.appendChild(c1body);
+    cols.appendChild(c1);
+
+    // Col 2: 原文（可编辑）
+    const c2 = document.createElement('div');
+    c2.className = 'col';
+    const pageIdx = i;
+    c2.innerHTML = `
+      <div class="col-head-bar">
+        <div class="col-head">原 文</div>
+        <button class="ocr-edit-btn" id="edit-btn-${pageIdx}" onclick="toggleEdit(${pageIdx})">編輯</button>
+        <button class="ocr-retrans-btn" id="retrans-btn-${pageIdx}"
+          style="display:none" onclick="retranslatePage(${pageIdx})">重譯此頁</button>
+      </div>`;
+    const c2body = document.createElement('div');
+    c2body.className = 'col-body jp';
+    c2body.id = `ocr-body-${pageIdx}`;
+    c2body.dataset.raw = ocrPages[i] || '';
+    c2body.innerHTML = marked.parse(ocrPages[i] || '');
+    c2.appendChild(c2body);
+    cols.appendChild(c2);
+
+    // Col 3: 譯文（有翻译时才显示）
+    if (hasTrans) {
+      const c3 = document.createElement('div');
+      c3.className = 'col';
+      c3.innerHTML = `
+        <div class="col-head-bar">
+          <div class="col-head">譯 文</div>
+          <button class="note-btn" id="note-btn-${i}" onclick="toggleNote(${i})"
+            title="為本頁記筆記（存疑/想法/待查），導出時附在本頁譯文後">筆記</button>
+        </div>`;
+      const c3body = document.createElement('div');
+      c3body.className = 'col-body zh';
+      c3body.id = `trans-body-${i}`;
+      // 过滤掉模型可能残留的 "> 原文" 引用行，只保留译文
+      const transClean = (transPages[i] || '')
+        .split('\n').filter(l => !l.startsWith('> ') && l !== '>').join('\n');
+      c3body.innerHTML = transClean.trim()
+        ? marked.parse(transClean)
+        : `<div class="trans-loading">${_translating ? '翻譯中…' : '（尚未翻譯）'}</div>`;
+      c3.appendChild(c3body);
+
+      // 筆記區：導出 / 存檔時隨頁帶走（折疊在 textarea 內，display:none 仍保留 value）
+      const noteText = (resultData.notes && resultData.notes[i]) || '';
+      const noteWrap = document.createElement('div');
+      noteWrap.className = 'note-wrap' + (noteText.trim() ? ' open' : '');
+      noteWrap.id = `note-wrap-${i}`;
+      noteWrap.innerHTML =
+        `<textarea class="note-ta" id="note-ta-${i}" onblur="autosaveSession()"
+           placeholder="在此記筆記：存疑、想法、待查…（導出時附在本頁譯文後）"></textarea>`;
+      c3.appendChild(noteWrap);
+      noteWrap.querySelector('textarea').value = noteText;   // 用 .value 賦值，避免 HTML 轉義
+      if (noteText.trim()) document.getElementById(`note-btn-${i}`).classList.add('active');
+
+      cols.appendChild(c3);
+    }
+
+    sec.appendChild(cols);
+    list.appendChild(sec);
+  }
+
+  // 續校光標：聚焦任一頁的編輯框/筆記框即記下「斷點在第幾頁」
+  list.onfocusin = (e) => {
+    const sec = e.target.closest('.page-section');
+    if (sec && sec.id.startsWith('page-section-')) {
+      _reviewCursor = parseInt(sec.id.slice('page-section-'.length), 10) || 0;
+    }
+  };
+
+  document.getElementById('result-area').style.display = '';
+  document.getElementById('result-area').scrollIntoView({ behavior:'smooth', block:'start' });
+  autosaveSession();
+}
+
+// 續校：滾動到斷點頁並高亮一閃
+function scrollToCursor(idx) {
+  const sec = document.getElementById('page-section-' + idx);
+  if (!sec) return;
+  setTimeout(() => {
+    sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    sec.classList.add('cursor-flash');
+    setTimeout(() => sec.classList.remove('cursor-flash'), 1800);
+  }, 150);
+}
+
+// 📝 展開/收起本頁筆記
+function toggleNote(idx) {
+  const wrap = document.getElementById(`note-wrap-${idx}`);
+  const btn  = document.getElementById(`note-btn-${idx}`);
+  if (!wrap) return;
+  const open = wrap.classList.toggle('open');
+  if (btn) btn.classList.toggle('active', open);
+  if (open) { const ta = document.getElementById(`note-ta-${idx}`); if (ta) ta.focus(); }
+  _reviewCursor = idx;
+}
+
+// ── 校讀存檔：保存 / 還原 / 自動存檔 ─────────────────────────
+const AUTOSAVE_KEY = 'jatrans_review_autosave';
+let _reviewCursor = 0;   // 續校光標：最後編輯/聚焦的頁號
+
+// 從當前 DOM + 內存收集完整校讀狀態（含人工校改、重譯、圖片模式）
+function collectReviewState() {
+  const total = (resultData.ocr_pages || []).length;
+  const ocr_pages = [], trans_pages = [], use_image = [];
+  for (let i = 0; i < total; i++) {
+    const ta   = document.getElementById('ocr-ta-' + i);      // 正在編輯則取編輯框
+    const body = document.getElementById('ocr-body-' + i);
+    ocr_pages.push(ta ? ta.value
+      : (body && body.dataset.raw != null ? body.dataset.raw : (resultData.ocr_pages[i] || '')));
+    trans_pages.push((resultData.trans_pages && resultData.trans_pages[i]) || '');
+    const sec = document.getElementById('page-section-' + i);
+    use_image.push(sec && sec.dataset.useImage === '1' ? 1 : 0);
+  }
+  // 筆記：優先取編輯框現值，回退到 resultData.notes
+  const notes = [];
+  for (let i = 0; i < total; i++) {
+    const nt = document.getElementById('note-ta-' + i);
+    notes.push(nt ? nt.value : ((resultData.notes && resultData.notes[i]) || ''));
+  }
+  return {
+    _type: 'lit_review_session', v: 1,
+    stem:     resultData.stem || 'output',
+    hasTrans: (resultData.trans_pages || []).length > 0,
+    source:   (document.getElementById('source') || {}).value || '日语',
+    target:   (document.getElementById('target') || {}).value || '中文',
+    page_map: (typeof pageMap !== 'undefined' ? pageMap : null),
+    ocr_pages, trans_pages, use_image, notes,
+    cursor:   _reviewCursor,
+  };
+}
+
+function downloadReviewJson() {
+  if (!(resultData.ocr_pages || []).length) { alert('暫無校讀內容'); return; }
+  const s = collectReviewState();
+  const url = URL.createObjectURL(new Blob([JSON.stringify(s)], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = (s.stem || 'output') + '.review.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// 從存檔還原視圖：只重建三欄，不調用 OCR / 翻譯
+function loadReviewSession(s) {
+  const ocr = s.ocr_pages || [], tr = s.trans_pages || [];
+  // 重建 ocr_md / bilingual_md，使「下載 OCR.md / 雙語.md」仍可用
+  const ocr_md = ocr.map((p, i) => `<!-- 第 ${i + 1} 頁 -->\n\n${p}`).join('\n\n---\n\n');
+  let bilingual_md = null;
+  if (s.hasTrans) {
+    const blocks = ocr.map((o, i) => {
+      const quoted = String(o).split('\n').map(l => l.trim() ? `> ${l}` : '>').join('\n');
+      return `<!--PAGE-->\n## 第 ${i + 1} 頁\n\n${quoted}\n\n${tr[i] || ''}`;
+    });
+    bilingual_md = `# ${s.stem || 'output'} — ${s.source || '日语'}${s.target || '中文'}對照\n\n` + blocks.join('\n\n---\n\n');
+  }
+  resultData = { stem: s.stem || 'output', ocr_pages: ocr, trans_pages: tr, ocr_md, bilingual_md, notes: s.notes || [] };
+  pageMap = s.page_map || null;
+  if (s.source) { const el = document.getElementById('source'); if (el) el.value = s.source; }
+  if (s.target) { const t = document.getElementById('target'); if (t) t.value = s.target; }
+
+  _expectTrans = !!s.hasTrans;
+  _renderedOcr = false;
+  _filledTrans = new Set();
+  const savedCursor = (typeof s.cursor === 'number') ? s.cursor : 0;
+  _suspendAutosave = true;
+  document.getElementById('progress-card').style.display = 'none';
+  showResult();
+  (s.use_image || []).forEach((v, i) => { if (v) toggleImageMode(i); });  // 還原圖片模式（會改寫 _reviewCursor）
+  _reviewCursor = savedCursor;   // 校正：上一步還原圖片模式會覆蓋光標，這裡撥回存檔值
+  _suspendAutosave = false;
+  autosaveSession();
+  maybeOfferContinue();   // 若有未翻譯的頁，提示「繼續翻譯」
+  if (_reviewCursor > 0) scrollToCursor(_reviewCursor);   // 跳轉到上次斷點
+}
+
+// 導入後檢查是否有"有原文、無譯文"的頁，提示繼續翻譯
+function maybeOfferContinue() {
+  const bar = document.getElementById('continue-bar');
+  if (!bar) return;
+  const total = (resultData.ocr_pages || []).length;
+  let pending = 0;
+  if (_expectTrans) {
+    for (let i = 0; i < total; i++) {
+      const ocr = (resultData.ocr_pages[i] || '').trim();
+      const tr  = (resultData.trans_pages?.[i] || '').trim();
+      if (ocr && !tr) pending++;
+    }
+  }
+  if (pending > 0) {
+    document.getElementById('continue-text').innerHTML =
+      `本存檔有 <b>${pending}</b> 頁尚未翻譯。可只翻這些頁，不會重做 OCR、也不重翻已完成的頁。`;
+    bar.style.display = 'flex';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function dismissContinue() {
+  const bar = document.getElementById('continue-bar');
+  if (bar) bar.style.display = 'none';
+}
+
+// 只翻譯未完成的頁（複用 /api/translate_page，逐頁填入；不重做 OCR、不重翻已完成）
+async function continueTranslation() {
+  const cfg = getConfig();
+  if (!cfg.translate_key) { alert('請先在「API 設定」填寫翻譯 API Key'); openSettings(); return; }
+  const total = (resultData.ocr_pages || []).length;
+  const todo = [];
+  for (let i = 0; i < total; i++) {
+    const ocr = (resultData.ocr_pages[i] || '').trim();
+    const tr  = (resultData.trans_pages?.[i] || '').trim();
+    if (ocr && !tr) todo.push(i);
+  }
+  if (!todo.length) { dismissContinue(); return; }
+
+  dismissContinue();
+  _translating = true;
+  if (!resultData.trans_pages) resultData.trans_pages = [];
+  todo.forEach(i => {
+    const el = document.getElementById('trans-body-' + i);
+    if (el) el.innerHTML = '<div class="trans-loading">翻譯中…</div>';
+  });
+
+  document.getElementById('progress-card').style.display = '';
+  document.getElementById('log-area').innerHTML = '';
+  document.getElementById('prog-title').textContent = '繼續翻譯剩餘頁面';
+  document.getElementById('prog-spinner').style.display = '';
+  document.getElementById('prog-dot').style.background = '#a8d5a2';
+  document.getElementById('prog-dot').style.animation  = 'pulse 1.5s ease-in-out infinite';
+
+  const n = todo.length, CONC = 4;
+  let done = 0, ptr = 0;
+  async function worker() {
+    while (ptr < n) {
+      const i = todo[ptr++];
+      try {
+        const resp = await fetch('/api/translate_page', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: resultData.ocr_pages[i], cfg }),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          fillTranslation(i, data.translation);
+        } else {
+          const el = document.getElementById('trans-body-' + i);
+          if (el) el.innerHTML = `<div class="trans-loading" style="color:var(--accent)">翻譯出錯：${esc(data.error || '')}（可重試）</div>`;
+        }
+      } catch (e) {
+        const el = document.getElementById('trans-body-' + i);
+        if (el) el.innerHTML = `<div class="trans-loading" style="color:var(--accent)">網絡錯誤：${esc(e.message)}（可重試）</div>`;
+      }
+      appendLog(`繼續翻譯 ${++done}/${n} 頁…`, 'prog');
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CONC, n) }, worker));
+
+  setDone(true);   // 內含 _translating = false
+  appendLog('剩餘頁面翻譯完成！', 'prog');
+  autosaveSession();
+  maybeOfferContinue();   // 若仍有出錯未完成的頁，再次提示
+}
+
+// 自動存檔到 localStorage（防意外關閉），超額或失敗則靜默跳過
+let _suspendAutosave = false;
+function autosaveSession() {
+  if (_suspendAutosave) return;
+  if (!(resultData.ocr_pages || []).length) return;
+  try {
+    const payload = JSON.stringify({ t: Date.now(), s: collectReviewState() });
+    if (payload.length > 4_500_000) return;   // 太大則放棄，避免撐爆 localStorage
+    localStorage.setItem(AUTOSAVE_KEY, payload);
+  } catch (e) { /* QuotaExceeded 等：忽略，手動「保存進度」仍可用 */ }
+}
+
+function restoreAutosave() {
+  let raw; try { raw = localStorage.getItem(AUTOSAVE_KEY); } catch { return; }
+  if (!raw) return;
+  let d; try { d = JSON.parse(raw); } catch { return; }
+  if (!d || !d.s || !(d.s.ocr_pages || []).length) return;
+  document.getElementById('resume-bar').style.display = 'none';
+  document.getElementById('shadow-zone').style.display = '';
+  document.getElementById('shadow-label').textContent =
+    '拖入原書 PDF 以顯示書影（選填，不上傳；自動存檔不含書影圖）';
+  loadReviewSession(d.s);
+}
+
+function dismissAutosave() {
+  document.getElementById('resume-bar').style.display = 'none';
+}
+
+// 頁面載入時檢測是否有未完成的自動存檔
+function checkAutosave() {
+  let raw; try { raw = localStorage.getItem(AUTOSAVE_KEY); } catch { return; }
+  if (!raw) return;
+  let d; try { d = JSON.parse(raw); } catch { return; }
+  if (!d || !d.s || !(d.s.ocr_pages || []).length) return;
+  const when  = d.t ? new Date(d.t).toLocaleString('zh-CN', { hour12: false }) : '';
+  const pages = d.s.ocr_pages.length;
+  document.getElementById('resume-text').innerHTML =
+    `檢測到上次未完成的校讀：<b>${esc(d.s.stem || 'output')}</b>（${pages} 頁${when ? '，' + when : ''}）。`;
+  const bar = document.getElementById('resume-bar');
+  bar.style.display = 'flex';
+}
+
+// ── 图片模式 + Word 导出 ─────────────────────────────────────
+function toggleImageMode(idx) {
+  _reviewCursor = idx;
+  const sec = document.getElementById(`page-section-${idx}`);
+  if (!sec) return;
+  const on = sec.dataset.useImage !== '1';
+  sec.dataset.useImage = on ? '1' : '0';
+  const btn = document.getElementById(`img-btn-${idx}`);
+  if (btn) {
+    btn.textContent = on ? '✓ 圖片' : '▣ 圖片';
+    btn.classList.toggle('active', on);
+  }
+  autosaveSession();
+}
+
+async function renderPdfPageToCanvas(pageNum) {
+  if (!pdfDoc) throw new Error('no PDF');
+  const page = await pdfDoc.getPage(pageNum);
+  const vp   = page.getViewport({ scale: 2.0 });
+  const canvas = document.createElement('canvas');
+  canvas.width = vp.width; canvas.height = vp.height;
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+  return canvas;
+}
+
+async function exportWord() {
+  const btn   = document.getElementById('export-btn');
+  const total = resultData.ocr_pages?.length || 0;
+  if (!total) return;
+
+  btn.disabled = true;
+  btn.textContent = '準備中…';
+
+  const pages = [];
+  for (let i = 0; i < total; i++) {
+    const sec     = document.getElementById(`page-section-${i}`);
+    const useImg  = sec?.dataset.useImage === '1';
+    const ocrBody = document.getElementById(`ocr-body-${i}`);
+    const ocr     = ocrBody?.dataset.raw || resultData.ocr_pages?.[i] || '';
+    const trans   = resultData.trans_pages?.[i] || '';
+    const note    = document.getElementById(`note-ta-${i}`)?.value || resultData.notes?.[i] || '';
+    const pg      = { page_num: i + 1, type: useImg ? 'image' : 'text', ocr, trans, note };
+
+    if (useImg && pdfDoc) {
+      const realPage = (pageMap && pageMap[i]) ? pageMap[i] : (i + 1);
+      btn.textContent = `渲染第 ${realPage} 頁…`;
+      try {
+        const canvas  = await renderPdfPageToCanvas(realPage);
+        pg.imageB64   = canvas.toDataURL('image/jpeg', 0.88);
+      } catch { pg.type = 'text'; }
+    }
+    pages.push(pg);
+  }
+
+  btn.textContent = '生成 Word…';
+  try {
+    const resp = await fetch('/api/export_docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pages,
+        stem:   resultData.stem || 'output',
+        source: (document.getElementById('source') || {}).value || '日语',
+        target: (document.getElementById('target') || {}).value || '中文',
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      alert('導出失敗：' + (err.error || resp.status));
+      return;
+    }
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = (resultData.stem || 'output') + '_对照.docx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch(e) {
+    alert('網絡錯誤：' + e.message);
+  }
+
+  btn.disabled  = false;
+  btn.textContent = '⬇ 匯出 Word 對照';
+}
+
+// ── OCR 编辑 + 单页重译 ──────────────────────────────────────
+function toggleEdit(idx) {
+  _reviewCursor = idx;
+  const body    = document.getElementById(`ocr-body-${idx}`);
+  const editBtn = document.getElementById(`edit-btn-${idx}`);
+  const retBtn  = document.getElementById(`retrans-btn-${idx}`);
+  const editing = body.dataset.editing === '1';
+
+  if (!editing) {
+    // 进入编辑模式：换成 textarea
+    const raw = body.dataset.raw || body.innerText;
+    body.dataset.raw = raw;
+    body.dataset.editing = '1';
+    body.innerHTML = `<textarea class="ocr-textarea" id="ocr-ta-${idx}">${esc(raw)}</textarea>`;
+    editBtn.textContent  = '完成';
+    editBtn.classList.add('active');
+    retBtn.style.display = '';
+  } else {
+    // 退出编辑：把 textarea 内容存回 raw，重新渲染
+    const ta  = document.getElementById(`ocr-ta-${idx}`);
+    const txt = ta ? ta.value : body.dataset.raw;
+    body.dataset.raw     = txt;
+    body.dataset.editing = '0';
+    body.innerHTML       = marked.parse(txt);
+    editBtn.textContent  = '編輯';
+    editBtn.classList.remove('active');
+    retBtn.style.display = 'none';
+    autosaveSession();   // 人工校改完成，存檔
+  }
+}
+
+async function retranslatePage(idx) {
+  _reviewCursor = idx;
+  const body   = document.getElementById(`ocr-body-${idx}`);
+  const ta     = document.getElementById(`ocr-ta-${idx}`);
+  const trans  = document.getElementById(`trans-body-${idx}`);
+  const retBtn = document.getElementById(`retrans-btn-${idx}`);
+  if (!ta || !trans) return;
+
+  const text = ta.value.trim();
+  if (!text) return;
+
+  retBtn.disabled = true;
+  retBtn.textContent = '翻譯中…';
+  trans.innerHTML = '<div class="trans-loading">重譯中，請稍候…</div>';
+
+  try {
+    const resp = await fetch('/api/translate_page', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, cfg: getConfig() }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      const clean = data.translation.split('\n')
+        .filter(l => !l.startsWith('> ') && l !== '>').join('\n');
+      trans.innerHTML = marked.parse(clean);
+      // 同步更新 resultData.trans_pages 以保持下载内容一致
+      if (resultData.trans_pages) resultData.trans_pages[idx] = data.translation;
+      _filledTrans.add(idx);   // 標記已填，避免流式期間後到的譯文覆蓋本次重譯
+      autosaveSession();   // 重譯完成，存檔
+    } else {
+      trans.innerHTML = `<div class="trans-loading" style="color:var(--accent)">錯誤：${esc(data.error)}</div>`;
+    }
+  } catch (e) {
+    trans.innerHTML = `<div class="trans-loading" style="color:var(--accent)">網絡錯誤：${esc(e.message)}</div>`;
+  }
+
+  retBtn.disabled = false;
+  retBtn.textContent = '重譯此頁';
+}
+
+// ── Download ─────────────────────────────────────────────────
+function download(type) {
+  // 從當前狀態實時重建，包含人工 OCR 校改與單頁重譯
+  const s   = collectReviewState();
+  const ocr = s.ocr_pages || [], tr = s.trans_pages || [];
+  if (!ocr.length) return;
+
+  let content, suffix;
+  if (type === 'ocr') {
+    content = ocr.map((p, i) => `<!-- 第 ${i + 1} 頁 -->\n\n${p}`).join('\n\n---\n\n');
+    suffix  = '.ocr.md';
+  } else {
+    if (!s.hasTrans) { alert('尚無譯文'); return; }
+    const notes = s.notes || [];
+    const blocks = ocr.map((o, i) => {
+      const quoted = String(o).split('\n').map(l => l.trim() ? `> ${l}` : '>').join('\n');
+      let block = `## 第 ${i + 1} 頁\n\n${quoted}\n\n${tr[i] || ''}`;
+      const note = (notes[i] || '').trim();
+      if (note) block += `\n\n**【筆記】**\n\n${note}`;
+      return block;
+    });
+    content = `# ${s.stem || 'output'} — ${s.source || '日语'}${s.target || '中文'}對照\n\n` + blocks.join('\n\n---\n\n');
+    suffix  = '.bilingual.md';
+  }
+
+  const name = (s.stem || 'output') + suffix;
+  const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function togglePass(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+// 獨立版：已移除「上傳至文獻庫」相關函數
+
+// ── 關於模態框 ────────────────────────────────────────────────
+function showAbout()  { document.getElementById('about-modal').style.display = 'flex'; }
+function closeAbout() { document.getElementById('about-modal').style.display = 'none'; }
+
+// ── 簡 / 繁 切換 ───────────────────────────────────────────────
+// 只轉換界面文字；文獻內容（.col-body 的原文/譯文）、輸入框、textarea 一律跳過，
+// 避免把日語漢字或用戶譯文錯誤地簡化。繁→簡用 OpenCC 轉換，簡→繁直接還原原始文本。
+let _t2s = null;
+let _curLang = localStorage.getItem('ja-lit-lang') || 'tw';   // 'tw' 繁體（原始） / 'cn' 簡體
+const _origText = new WeakMap();   // 文本節點 -> 原始（繁體）字符串
+const _SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'INPUT', 'NOSCRIPT', 'CODE', 'PRE']);
+
+function _convShouldSkip(node) {
+  for (let el = node.parentElement; el; el = el.parentElement) {
+    if (_SKIP_TAGS.has(el.tagName)) return true;
+    if (el.classList && (el.classList.contains('col-body') || el.classList.contains('noconv'))) return true;
+  }
+  return false;
+}
+
+function _convertTextNode(node, lang) {
+  if (!_origText.has(node)) _origText.set(node, node.nodeValue);
+  const orig = _origText.get(node);
+  node.nodeValue = (lang === 'cn' && _t2s) ? _t2s(orig) : orig;
+}
+
+function _convertTree(root, lang) {
+  if (root.nodeType === 3) { if (!_convShouldSkip(root)) _convertTextNode(root, lang); return; }
+  if (root.nodeType !== 1) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(n) {
+      if (!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      return _convShouldSkip(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  const nodes = [];
+  for (let n; (n = walker.nextNode()); ) nodes.push(n);
+  for (const n of nodes) _convertTextNode(n, lang);
+}
+
+function _convReady(cb) {
+  if (window.OpenCC) {
+    if (!_t2s) _t2s = OpenCC.Converter({ from: 't', to: 'cn' });
+    cb(); return;
+  }
+  const s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.min.js';
+  s.onload = () => { _t2s = OpenCC.Converter({ from: 't', to: 'cn' }); cb(); };
+  s.onerror = () => alert('簡繁轉換組件加載失敗，請檢查網絡');
+  document.head.appendChild(s);
+}
+
+function applyLang(lang) {
+  _curLang = lang;
+  localStorage.setItem('ja-lit-lang', lang);
+  const btn = document.getElementById('lang-toggle');
+  const run = () => {
+    _convertTree(document.body, lang);
+    document.documentElement.lang = (lang === 'cn') ? 'zh-Hans' : 'zh-Hant';
+    if (btn) btn.textContent = (lang === 'cn') ? '繁體' : '简体';
+  };
+  if (lang === 'cn') _convReady(run); else run();
+}
+
+function toggleLang() { applyLang(_curLang === 'cn' ? 'tw' : 'cn'); }
+
+// 動態渲染的界面（校讀結果、按鈕等）在簡體模式下也即時轉換
+new MutationObserver((muts) => {
+  if (_curLang !== 'cn' || !_t2s) return;
+  for (const m of muts) for (const node of m.addedNodes) {
+    if (node.nodeType === 1) _convertTree(node, 'cn');
+    else if (node.nodeType === 3 && !_convShouldSkip(node)) _convertTextNode(node, 'cn');
+  }
+}).observe(document.body, { childList: true, subtree: true });
+
+if (_curLang === 'cn') applyLang('cn');
+else { const _b = document.getElementById('lang-toggle'); if (_b) _b.textContent = '简体'; }
+
+// ── Init ─────────────────────────────────────────────────────
+buildProviderSelect();
+onProviderChange();
+loadSettings();
+const _s = JSON.parse(localStorage.getItem('jatrans_cfg3') || '{}');
+if (!_s.paddle_token || !_s.translate_key) openSettings();
+
+// 校讀存檔：檢測上次未完成的自動存檔 + 每 30 秒定時存檔
+// 放到空閒時段執行：自動存檔可能有數 MB，避免在首屏阻塞主線程解析 JSON
+const _idle = window.requestIdleCallback || ((f) => setTimeout(f, 1));
+_idle(() => { checkAutosave(); checkActiveTask(); });
+setInterval(autosaveSession, 30000);
+</script>
+</body>
+</html>

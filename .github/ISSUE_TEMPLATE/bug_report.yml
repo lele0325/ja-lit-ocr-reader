@@ -1,0 +1,38 @@
+name: 问题报告
+description: 报告可复现的错误或异常行为
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先移除 API Key、Token、私人文献内容和个人信息。
+  - type: input
+    id: environment
+    attributes:
+      label: 运行环境
+      description: Windows、Python、浏览器版本
+      placeholder: Windows 11 / Python 3.12 / Chrome
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请按顺序描述做了什么
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果与错误信息
+      description: 不要粘贴任何真实 Key 或 Token
+    validations:
+      required: true
+
