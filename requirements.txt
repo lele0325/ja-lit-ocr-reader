@@ -2,5 +2,4 @@ flask
 requests
 python-docx
 PyMuPDF
-gunicorn; platform_system != "Windows"
 waitress

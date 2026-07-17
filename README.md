@@ -105,24 +105,7 @@ python server.py
 
 打开 <http://127.0.0.1:7860>。
 
-Windows 一键启动器使用 Waitress。Linux/Hugging Face Docker 部署使用单 worker 的 Gunicorn：
-
-```bash
-gunicorn -w 1 --threads 8 --timeout 1800 -b 0.0.0.0:7860 server:app
-```
-
-必须保持单 worker，因为任务状态存储在当前进程内存中；多个 worker 会导致轮询时找不到任务。
-
-## Docker / Hugging Face Spaces
-
-仓库中的 `Dockerfile` 可直接用于 Docker 或 Hugging Face Docker Space：
-
-```bash
-docker build -t ja-lit-ocr-reader .
-docker run --rm -p 7860:7860 ja-lit-ocr-reader
-```
-
-若公开部署，使用者的文件和 API Key 请求会经过部署服务器。对密钥安全要求较高时，建议使用 Windows 本地版。
+Windows 一键启动器使用 Waitress，并默认只监听本机 `127.0.0.1`。
 
 ## 常见问题
 
@@ -156,7 +139,6 @@ docker run --rm -p 7860:7860 ja-lit-ocr-reader
 ├─ 开始使用（本地版）.bat      # Windows 双击入口
 ├─ start-local.ps1            # 环境准备、容错和服务启动
 ├─ 本地版使用说明.txt          # 面向普通用户的简明说明
-├─ Dockerfile                 # Docker / Hugging Face 部署
 └─ README.md
 ```
 
