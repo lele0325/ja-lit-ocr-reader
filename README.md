@@ -1,13 +1,3 @@
----
-title: 日語文獻 OCR 校讀
-emoji: 📖
-colorFrom: yellow
-colorTo: red
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # 日语文献 OCR 校读工具
 
 面向日语及多语言学术文献的本地 OCR、翻译与逐页校读工具。
@@ -17,6 +7,14 @@ pinned: false
 > OCR 识别 → 多模型翻译 → 书影/原文/译文三栏校读 → 导出 Word 或 Markdown
 
 本项目首先针对日语学术文献设计，同时支持英语、韩语、中文、法语、德语、拉丁语等源语言。Windows 用户可以双击启动，无需手动配置 Web 服务。
+
+## 在线使用
+
+无需安装，可直接访问已部署的在线版：
+
+**[打开日语文献 OCR 校读工具](https://lele0325-ja-ocr-reader.hf.space/)**
+
+> 在线版适合临时使用；对 API Key 和文献隐私要求较高时，建议使用下方的 Windows 本地版。
 
 ## 功能特点
 
